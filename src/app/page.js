@@ -720,7 +720,7 @@ function FAQ() {
   const faqs = useMemo(
     () => [
       {
-        q: "Do you offer insurance billing?",
+        q: "Do you offer insurance billing for me?",
         a: "Not in this version. This UI is built around transparent self-pay pricing (you can add insurance later if you want).",
       },
       {
