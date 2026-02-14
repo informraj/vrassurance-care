@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/lib/supabase";
 
 export default function Page() {
   const [careType, setCareType] = useState("therapy");
@@ -32,6 +33,7 @@ export default function Page() {
   const [query, setQuery] = useState("");
   const [stateValue, setStateValue] = useState("Texas");
   const [showSignIn, setShowSignIn] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
 
   const specialties = useMemo(
     () => [
@@ -149,9 +151,13 @@ export default function Page() {
     return <SignInPage onBack={() => setShowSignIn(false)} />;
   }
 
+  if (showRegister) {
+    return <RegisterProviderPage onBack={() => setShowRegister(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 text-foreground">
-      <TopNav onSignIn={() => setShowSignIn(true)} />
+      <TopNav onSignIn={() => setShowSignIn(true)} onRegister={() => setShowRegister(true)} />
 
       <main>
         <Hero
@@ -221,7 +227,7 @@ export default function Page() {
   );
 }
 
-function TopNav({ onSignIn }) {
+function TopNav({ onSignIn, onRegister }) {
   return (
     <div className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
@@ -237,6 +243,7 @@ function TopNav({ onSignIn }) {
           <a className="text-sm text-muted-foreground hover:text-foreground" href="#providers">Find a provider</a>
           <a className="text-sm text-muted-foreground hover:text-foreground" href="#how">How it works</a>
           <a className="text-sm text-muted-foreground hover:text-foreground" href="#faq">FAQ</a>
+          <button onClick={onRegister} className="text-sm text-muted-foreground hover:text-foreground">Register as Provider</button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -899,6 +906,223 @@ function SignInPage({ onBack }) {
             className="w-full rounded-2xl"
             onClick={onBack}
           >
+            Back to home
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function RegisterProviderPage({ onBack }) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [pincode, setPincode] = useState("");
+
+  const [qualifications, setQualifications] = useState([
+    { qualification: "", institution: "", percentage: "" },
+  ]);
+
+  const [certifications, setCertifications] = useState([
+    { certification_name: "", issuing_body: "", year: "" },
+  ]);
+
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const updateQualification = (index, field, value) => {
+    const updated = [...qualifications];
+    updated[index][field] = value;
+    setQualifications(updated);
+  };
+
+  const addQualification = () => {
+    setQualifications([
+      ...qualifications,
+      { qualification: "", institution: "", percentage: "" },
+    ]);
+  };
+
+  const updateCertification = (index, field, value) => {
+    const updated = [...certifications];
+    updated[index][field] = value;
+    setCertifications(updated);
+  };
+
+  const addCertification = () => {
+    setCertifications([
+      ...certifications,
+      { certification_name: "", issuing_body: "", year: "" },
+    ]);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
+      setSuccess(false);
+
+      
+
+      const { data: provider, error: providerError } = await supabase
+        .from("providers")
+        .insert({
+          first_name: firstName,
+          last_name: lastName,
+        })
+        .select()
+        .single();
+
+      if (providerError) throw providerError;
+
+      const providerId = provider.id;
+
+      await supabase.from("provider_phones").insert({
+        provider_id: providerId,
+        phone_number: phone,
+        is_active: true,
+      });
+
+      await supabase.from("provider_addresses").insert({
+        provider_id: providerId,
+        address_line: address,
+        city,
+        state,
+        pincode,
+        is_active: true,
+      });
+
+      const educationRows = qualifications
+        .filter((q) => q.qualification !== "")
+        .map((q) => ({
+          provider_id: providerId,
+          degree: q.qualification,
+          institution: q.institution,
+          percentage: q.percentage || null,
+        }));
+
+      if (educationRows.length > 0) {
+        await supabase.from("education").insert(educationRows);
+      }
+
+      const certificationRows = certifications
+        .filter((c) => c.certification_name !== "")
+        .map((c) => ({
+          provider_id: providerId,
+          certification_name: c.certification_name,
+          issuing_body: c.issuing_body,
+          year: c.year || null,
+        }));
+
+      if (certificationRows.length > 0) {
+        await supabase.from("certifications").insert(certificationRows);
+      }
+
+      setSuccess(true);
+      setFirstName("");
+      setLastName("");
+      setPhone("");
+      setAddress("");
+      setCity("");
+      setState("");
+      setPincode("");
+      setQualifications([{ qualification: "", institution: "", percentage: "" }]);
+      setCertifications([{ certification_name: "", issuing_body: "", year: "" }]);
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert("Something went wrong. Check console.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 px-4">
+      <Card className="w-full max-w-3xl rounded-3xl">
+        <CardHeader>
+          <CardTitle className="text-2xl">Register as a Provider</CardTitle>
+          <p className="text-sm text-muted-foreground">Submit your details for admin approval.</p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            <Input placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          </div>
+
+          <Input placeholder="Primary Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input placeholder="Address Line" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <Input placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
+            <Input placeholder="State" value={state} onChange={(e) => setState(e.target.value)} />
+            <Input placeholder="Pincode" value={pincode} onChange={(e) => setPincode(e.target.value)} />
+          </div>
+
+          <div className="space-y-4">
+            <div className="text-lg font-semibold">Qualifications</div>
+            {qualifications.map((q, index) => (
+              <div key={index} className="rounded-2xl border p-4 space-y-3 bg-muted/20">
+                <Input
+                  placeholder="Qualification"
+                  value={q.qualification}
+                  onChange={(e) => updateQualification(index, "qualification", e.target.value)}
+                />
+                <Input
+                  placeholder="Institution"
+                  value={q.institution}
+                  onChange={(e) => updateQualification(index, "institution", e.target.value)}
+                />
+                <Input
+                  placeholder="Percentage / Grade"
+                  value={q.percentage}
+                  onChange={(e) => updateQualification(index, "percentage", e.target.value)}
+                />
+              </div>
+            ))}
+            <Button type="button" variant="outline" onClick={addQualification} className="rounded-2xl">
+              Add Qualification
+            </Button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="text-lg font-semibold">Certifications</div>
+            {certifications.map((cert, index) => (
+              <div key={index} className="rounded-2xl border p-4 space-y-3 bg-muted/20">
+                <Input
+                  placeholder="Certification Name"
+                  value={cert.certification_name}
+                  onChange={(e) => updateCertification(index, "certification_name", e.target.value)}
+                />
+                <Input
+                  placeholder="Issuing Body"
+                  value={cert.issuing_body}
+                  onChange={(e) => updateCertification(index, "issuing_body", e.target.value)}
+                />
+                <Input
+                  placeholder="Year"
+                  value={cert.year}
+                  onChange={(e) => updateCertification(index, "year", e.target.value)}
+                />
+              </div>
+            ))}
+            <Button type="button" variant="outline" onClick={addCertification} className="rounded-2xl">
+              Add Certification
+            </Button>
+          </div>
+
+          {success && (
+            <div className="text-green-600 text-sm">Submitted successfully. Await admin approval.</div>
+          )}
+
+          <Button className="w-full rounded-2xl" onClick={handleSubmit} disabled={loading}>
+            {loading ? "Submitting..." : "Submit for Review"}
+          </Button>
+
+          <Button variant="ghost" className="w-full rounded-2xl" onClick={onBack}>
             Back to home
           </Button>
         </CardContent>
